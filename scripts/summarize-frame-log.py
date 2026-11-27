@@ -10,7 +10,7 @@ from statistics import median
 FRAME = re.compile(
     r"\b(\d+(?:\.\d+)?) fps, (\d+(?:\.\d+)?) ms/frame"
     r" \((\d+(?:\.\d+)?) preparing:.*?\),\s*(\d+) draws/frame,"
-    r" dropped \d+ without a host pipeline \((\d+) being made\)"
+    r" dropped (\d+) without a host pipeline \((\d+) being made\)"
 )
 ROOM = re.compile(
     r"the texture queue's room:.*?\+ (\d+) MB kept for render targets"
@@ -34,9 +34,9 @@ def read_samples(lines):
             continue
         time = datetime.fromisoformat(stamp[0]).timestamp()
         if match:
-            fps, milliseconds, preparing, draws, building = match.groups()
+            fps, milliseconds, preparing, draws, dropped, building = match.groups()
             frames.append((time, float(fps), float(milliseconds), float(preparing),
-                           int(draws), int(building)))
+                           int(draws), int(building), int(dropped)))
         if budget:
             budgets.append((time, (int(budget[1]), budget[2].startswith("no room"))))
         if upload:
@@ -70,6 +70,7 @@ def summarize(lines, min_draws=1000, slow_ms=200, start=0, end=None):
     if not world:
         return {"samples": 0}
     slow = [frame for frame in world if frame[2] >= slow_ms]
+    drops_without_builds = [frame[6] for frame in world if frame[5] == 0]
     room = correlate(world, budgets)
     slow_room = correlate(slow, budgets)
     slow_uploads = correlate(slow, uploads)
@@ -79,6 +80,9 @@ def summarize(lines, min_draws=1000, slow_ms=200, start=0, end=None):
         "median_fps": round(median(frame[1] for frame in world), 2),
         "median_frame_ms": round(median(frame[2] for frame in world), 2),
         "median_prepare_ms": round(median(frame[3] for frame in world), 2),
+        "samples_with_zero_pipelines_building": len(drops_without_builds),
+        "median_dropped_draws_per_frame_with_zero_pipelines_building": median(drops_without_builds)
+        if drops_without_builds else None,
         "slow_threshold_ms": slow_ms,
         "slow_samples": len(slow),
         "slow_samples_with_zero_pipelines_building": sum(frame[5] == 0 for frame in slow),

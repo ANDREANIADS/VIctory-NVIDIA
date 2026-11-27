@@ -1,0 +1,132 @@
+rustc 1.98.1 (48a229cea 2026-09-01)
+binary: rustc
+commit-hash: 48a229ceaefd4985c50990b14116b6d856af0985
+commit-date: 2026-09-01
+host: x86_64-unknown-linux-gnu
+release: 1.98.1
+LLVM version: 22.1.8
+
+base df2daafeb1b2170931cf7a6eddff6de254841d9c | crates/victory-shader/src/bvh.rs 3f79f8220195a1c6c406a8708d255e932fa051d1
+running 16 tests
+test tests::a_box_switched_off_and_a_missing_child_return_none ... ok
+test tests::a_ray_starting_inside_a_box_enters_it_at_its_origin ... ok
+test tests::a_ray_through_a_shared_edge_misses_neither_triangle ... ok
+test tests::a_triangle_is_missed_beside_behind_and_edge_on ... ok
+test tests::a_triangle_returns_distance_and_weights_over_one_denominator ... ok
+test tests::an_empty_slot_is_never_entered ... ok
+test tests::axis_aligned_rays_and_origins_on_a_face_make_no_nan ... ok
+test tests::boxes_are_returned_nearest_first_and_misses_last ... ok
+test tests::equal_distances_keep_child_order ... ok
+test tests::half_float_boxes_test_like_their_widened_values ... ok
+test tests::halves_convert_exactly ... ok
+test tests::instances_and_procedural_nodes_return_a_triangle_miss ... ok
+test tests::node_pointers_name_64_byte_nodes_past_the_descriptors_base ... ok
+test tests::the_id_dword_says_which_vertices_the_weights_belong_to ... ok
+test tests::the_largest_axis_and_its_sign_do_not_change_the_answer ... ok
+test tests::triangles_one_to_three_take_their_vertices_and_their_id_byte ... ok
+
+test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+0 geometry central false 42a00000 41800000 40800000 40800000
+0 geometry central true 42a00000 41800000 40800000 40800000
+0 geometry offset false 7f800000 3f800000 00000000 00000000
+0 geometry offset true 7f800000 3f800000 00000000 00000000
+1 geometry central false 42a00000 41800000 40800000 40800000
+1 geometry central true 42a00000 41800000 40800000 40800000
+1 geometry offset false 7f800000 3f800000 00000000 00000000
+1 geometry offset true 7f800000 3f800000 00000000 00000000
+2 geometry central false 42a00000 41800000 40800000 40800000
+2 geometry central true 42a00000 41800000 40800000 40800000
+2 geometry offset false 7f800000 3f800000 00000000 00000000
+2 geometry offset true 7f800000 3f800000 00000000 00000000
+3 geometry central false 42a00000 41800000 40800000 40800000
+3 geometry central true 42a00000 41800000 40800000 40800000
+3 geometry offset false 7f800000 3f800000 00000000 00000000
+3 geometry offset true 7f800000 3f800000 00000000 00000000
+4 geometry central false 00000010 ffffffff ffffffff ffffffff
+4 geometry central true 00000010 ffffffff ffffffff ffffffff
+4 geometry offset false ffffffff ffffffff ffffffff ffffffff
+4 geometry offset true ffffffff ffffffff ffffffff ffffffff
+5 geometry central false 00000010 ffffffff ffffffff ffffffff
+5 geometry central true 00000010 ffffffff ffffffff ffffffff
+5 geometry offset false ffffffff ffffffff ffffffff ffffffff
+5 geometry offset true ffffffff ffffffff ffffffff ffffffff
+6 zero central false 7f800000 3f800000 00000000 00000000
+6 zero central true 7f800000 3f800000 00000000 00000000
+6 zero offset false 7f800000 3f800000 00000000 00000000
+6 zero offset true 7f800000 3f800000 00000000 00000000
+6 pattern central false 7f800000 3f800000 00000000 00000000
+6 pattern central true 7f800000 3f800000 00000000 00000000
+6 pattern offset false 7f800000 3f800000 00000000 00000000
+6 pattern offset true 7f800000 3f800000 00000000 00000000
+7 zero central false 7f800000 3f800000 00000000 00000000
+7 zero central true 7f800000 3f800000 00000000 00000000
+7 zero offset false 7f800000 3f800000 00000000 00000000
+7 zero offset true 7f800000 3f800000 00000000 00000000
+7 pattern central false 7f800000 3f800000 00000000 00000000
+7 pattern central true 7f800000 3f800000 00000000 00000000
+7 pattern offset false 7f800000 3f800000 00000000 00000000
+7 pattern offset true 7f800000 3f800000 00000000 00000000
+
+pr403 a2657986706886c0a27427b5e78d790035201def | crates/victory-shader/src/bvh.rs db2012b42ea0d223bb042c6ac37e8d56feade3e9
+running 16 tests
+test tests::a_box_switched_off_and_a_missing_child_return_none ... ok
+test tests::a_ray_starting_inside_a_box_enters_it_at_its_origin ... ok
+test tests::a_ray_through_a_shared_edge_misses_neither_triangle ... ok
+test tests::a_triangle_is_missed_beside_behind_and_edge_on ... ok
+test tests::a_triangle_returns_distance_and_weights_over_one_denominator ... ok
+test tests::an_empty_slot_is_never_entered ... ok
+test tests::axis_aligned_rays_and_origins_on_a_face_make_no_nan ... ok
+test tests::boxes_are_returned_nearest_first_and_misses_last ... ok
+test tests::equal_distances_keep_child_order ... ok
+test tests::half_float_boxes_test_like_their_widened_values ... ok
+test tests::halves_convert_exactly ... ok
+test tests::instances_and_procedural_nodes_return_all_ones ... ok
+test tests::node_pointers_name_64_byte_nodes_past_the_descriptors_base ... ok
+test tests::the_id_dword_says_which_vertices_the_weights_belong_to ... ok
+test tests::the_largest_axis_and_its_sign_do_not_change_the_answer ... ok
+test tests::triangles_one_to_three_take_their_vertices_and_their_id_byte ... ok
+
+test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+0 geometry central false 42a00000 41800000 40800000 40800000
+0 geometry central true 42a00000 41800000 40800000 40800000
+0 geometry offset false 7f800000 3f800000 00000000 00000000
+0 geometry offset true 7f800000 3f800000 00000000 00000000
+1 geometry central false 42a00000 41800000 40800000 40800000
+1 geometry central true 42a00000 41800000 40800000 40800000
+1 geometry offset false 7f800000 3f800000 00000000 00000000
+1 geometry offset true 7f800000 3f800000 00000000 00000000
+2 geometry central false 42a00000 41800000 40800000 40800000
+2 geometry central true 42a00000 41800000 40800000 40800000
+2 geometry offset false 7f800000 3f800000 00000000 00000000
+2 geometry offset true 7f800000 3f800000 00000000 00000000
+3 geometry central false 42a00000 41800000 40800000 40800000
+3 geometry central true 42a00000 41800000 40800000 40800000
+3 geometry offset false 7f800000 3f800000 00000000 00000000
+3 geometry offset true 7f800000 3f800000 00000000 00000000
+4 geometry central false 00000010 ffffffff ffffffff ffffffff
+4 geometry central true 00000010 ffffffff ffffffff ffffffff
+4 geometry offset false ffffffff ffffffff ffffffff ffffffff
+4 geometry offset true ffffffff ffffffff ffffffff ffffffff
+5 geometry central false 00000010 ffffffff ffffffff ffffffff
+5 geometry central true 00000010 ffffffff ffffffff ffffffff
+5 geometry offset false ffffffff ffffffff ffffffff ffffffff
+5 geometry offset true ffffffff ffffffff ffffffff ffffffff
+6 zero central false ffffffff ffffffff ffffffff ffffffff
+6 zero central true ffffffff ffffffff ffffffff ffffffff
+6 zero offset false ffffffff ffffffff ffffffff ffffffff
+6 zero offset true ffffffff ffffffff ffffffff ffffffff
+6 pattern central false ffffffff ffffffff ffffffff ffffffff
+6 pattern central true ffffffff ffffffff ffffffff ffffffff
+6 pattern offset false ffffffff ffffffff ffffffff ffffffff
+6 pattern offset true ffffffff ffffffff ffffffff ffffffff
+7 zero central false ffffffff ffffffff ffffffff ffffffff
+7 zero central true ffffffff ffffffff ffffffff ffffffff
+7 zero offset false ffffffff ffffffff ffffffff ffffffff
+7 zero offset true ffffffff ffffffff ffffffff ffffffff
+7 pattern central false ffffffff ffffffff ffffffff ffffffff
+7 pattern central true ffffffff ffffffff ffffffff ffffffff
+7 pattern offset false ffffffff ffffffff ffffffff ffffffff
+7 pattern offset true ffffffff ffffffff ffffffff ffffffff
+
+24/24 synthetic controls (kinds 0–5) matched bit for bit.
+16/16 synthetic cases (kinds 6–7) changed from the triangle-miss words to four ffffffff words.

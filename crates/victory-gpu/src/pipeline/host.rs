@@ -1285,7 +1285,7 @@ mod tests {
         let pso = graphics_depth_bounds_pipeline(&host.device, &root, &desc, g.depth1(), &name)
             .expect("depth-bounds PSO made");
         let loaded = super::super::library::LOADED.load(Ordering::Relaxed);
-        graphics_depth_bounds_pipeline(&host.device, &root, &desc, g.depth1(), &name)
+        let cached = graphics_depth_bounds_pipeline(&host.device, &root, &desc, g.depth1(), &name)
             .expect("depth-bounds PSO made again");
         assert!(
             super::super::library::LOADED.load(Ordering::Relaxed) > loaded,
@@ -1381,14 +1381,17 @@ mod tests {
             out.unwrap()
         };
 
-        let run_draw = |min: f32, max: f32| -> u8 {
+        let run_draw = |pso: &ID3D12PipelineState, min: f32, max: f32, binding: &str| -> u8 {
+            use windows::core::Interface;
             let mut state = crate::draw::State::default();
             let first_list = host.new_list().unwrap();
             state.set_depth_bounds(&first_list, min, max);
             first_list.close();
             // Replay onto a second host list, exercising `State::replay`.
             let list = host.new_list().unwrap();
-            state.replay(&list);
+            if binding == "replay before setup" {
+                state.replay(&list);
+            }
             let rtv = host.rtv(Some(&color), None);
             let dsv = host.dsv(&depth, None);
             let vp = D3D12_VIEWPORT {
@@ -1413,7 +1416,13 @@ mod tests {
                 list.list.RSSetViewports(&[vp]);
                 list.list.RSSetScissorRects(&[rect]);
                 list.list.SetGraphicsRootSignature(&root);
-                list.list.SetPipelineState(&pso);
+                list.list.SetPipelineState(pso);
+                match binding {
+                    "direct" => list.list.cast::<ID3D12GraphicsCommandList1>().unwrap().OMSetDepthBounds(min, max),
+                    "replay after setup" => state.replay(&list),
+                    "replay before setup" => (),
+                    _ => unreachable!(),
+                }
                 list.list
                     .IASetPrimitiveTopology(windows::Win32::Graphics::Direct3D::D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
                 list.list.DrawInstanced(3, 1, 0, 0);
@@ -1462,8 +1471,21 @@ mod tests {
             }
         };
 
-        assert_eq!(run_draw(0.6, 1.0), 0, "depth 0.5 outside [0.6, 1.0] must be rejected");
-        assert_eq!(run_draw(0.4, 0.6), 255, "depth 0.5 inside [0.4, 0.6] must pass");
+        let alternate = |func: D3D12_COMPARISON_FUNC, suffix: &str| {
+            let mut depth = g.depth1();
+            depth.DepthEnable = true.into();
+            depth.DepthFunc = func;
+            graphics_depth_bounds_pipeline(&host.device, &root, &desc, depth, &format!("{name}-{suffix}")).unwrap()
+        };
+        let always = alternate(D3D12_COMPARISON_FUNC_ALWAYS, "always");
+        let equal = alternate(D3D12_COMPARISON_FUNC_EQUAL, "equal");
+        let mut results = Vec::new();
+        for (label, pipeline) in [("original", &pso), ("cached", &cached), ("always", &always), ("equal", &equal)] {
+            for binding in ["replay before setup", "replay after setup", "direct"] {
+                results.push((label, binding, run_draw(pipeline, 0.6, 1.0, binding), run_draw(pipeline, 0.4, 0.6, binding)));
+            }
+        }
+        assert!(results.iter().all(|(_, _, reject, pass)| (*reject, *pass) == (0, 255)), "{results:#?}");
     }
 
     fn element(format: DXGI_FORMAT, offset: u32) -> D3D12_INPUT_ELEMENT_DESC {

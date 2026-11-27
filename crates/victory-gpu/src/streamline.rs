@@ -274,8 +274,8 @@ static PRESENT_HOOKED: AtomicBool = AtomicBool::new(false);
 /// between frames, one caller at a time.
 #[derive(Default)]
 struct Calls {
-    /// Optimal render sizes by output size and mode.
-    optimal: Vec<([u32; 2], u32, Option<[u32; 2]>)>,
+    /// Reported render dimensions by output size and mode, independent of the current scene.
+    optimal: Vec<([u32; 2], u32, Option<plan::RenderSizes>)>,
     /// The mode, sizes and preset the last options named.
     last: Option<(u32, [u32; 2], [u32; 2])>,
     /// Frame generation: on, the frames for each rendered one last asked of it (0 off), and
@@ -1304,7 +1304,7 @@ fn record(list: *mut c_void, textures: &Textures, camera: &plan::Camera, pre_exp
         spent(T_UPSCALE_LOCK, began);
     }
     let output = camera.output;
-    let optimal = |calls: &mut Calls, mode: u32| -> Option<[u32; 2]> {
+    let optimal = |calls: &mut Calls, mode: u32| -> Option<plan::RenderSizes> {
         if let Some(&(_, _, size)) = calls.optimal.iter().find(|(o, m, _)| *o == output && *m == mode) {
             return size;
         }
@@ -1312,14 +1312,13 @@ fn record(list: *mut c_void, textures: &Textures, camera: &plan::Camera, pre_exp
         let mut settings = abi::DlssOptimalSettings::default();
         // SAFETY: filled options and a structure to fill.
         let code = unsafe { optimal_of(&options, &mut settings) };
-        let size = (code == 0 && settings.optimal_render_width > 0)
-            .then_some([settings.optimal_render_width, settings.optimal_render_height]);
+        let size = plan::RenderSizes::from_query(code, &settings);
         calls.optimal.push((output, mode, size));
         size
     };
-    let sizes: Vec<(u32, Option<[u32; 2]>)> = plan::MODES.iter().map(|&m| (m, optimal(&mut calls, m))).collect();
-    let optimal_of_mode = |m: u32| sizes.iter().find(|s| s.0 == m).and_then(|s| s.1);
-    let mode = plan::pick_mode(camera.render, output, optimal_of_mode)
+    let sizes = plan::MODES.map(|m| (m, optimal(&mut calls, m)));
+    let sizes_of_mode = |m: u32| sizes.iter().find(|s| s.0 == m).and_then(|s| s.1);
+    let mode = plan::select_mode(camera.render, output, plan.asked.mode, sizes_of_mode)
         .ok_or_else(|| format!("no DLSS mode takes a {:?} render for a {output:?} output", camera.render))?;
     let mut options = abi::DlssOptions::new(mode, output, plan.asked.preset);
     options.pre_exposure = if pre_exposure > 0.0 { pre_exposure } else { 1.0 };
@@ -1368,7 +1367,7 @@ fn record(list: *mut c_void, textures: &Textures, camera: &plan::Camera, pre_exp
     if let Some(began) = began {
         spent(T_UPSCALE, began);
     }
-    Ok(Recorded { mode, optimal: optimal_of_mode(mode), changed, jitter: constants.jitter_offset, mvec_scale: constants.mvec_scale })
+    Ok(Recorded { mode, optimal: sizes_of_mode(mode).map(|s| s.optimal), changed, jitter: constants.jitter_offset, mvec_scale: constants.mvec_scale })
 }
 
 /// The title's FidelityFX upscaler `context` is destroyed: what DLSS made
@@ -2081,7 +2080,7 @@ fn check_run(output: [u32; 2], device: bool, present: bool) -> Vec<String> {
                 .optimal
                 .iter()
                 .filter(|(o, _, _)| *o == output)
-                .map(|&(_, m, s)| format!("{} {:?}", plan::sl_mode_name(m), s))
+                .map(|&(_, m, s)| format!("{} {:?}", plan::sl_mode_name(m), s.map(|s| s.optimal)))
                 .collect();
             if sizes.is_empty() { "?".into() } else { sizes.join(", ") }
         };

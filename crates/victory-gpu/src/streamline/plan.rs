@@ -134,6 +134,54 @@ pub fn pick_mode(render: [u32; 2], output: [u32; 2], optimal: impl Fn(u32) -> Op
         .map(|(mode, _)| mode)
 }
 
+/// Render dimensions returned by one successful Streamline settings query.
+#[derive(Clone, Copy, Debug)]
+pub(super) struct RenderSizes {
+    pub optimal: [u32; 2],
+    min: [u32; 2],
+    max: [u32; 2],
+}
+
+impl RenderSizes {
+    pub(super) fn from_query(code: i32, settings: &abi::DlssOptimalSettings) -> Option<Self> {
+        let optimal = [settings.optimal_render_width, settings.optimal_render_height];
+        (code == 0 && !optimal.contains(&0)).then_some(Self {
+            optimal,
+            min: [settings.render_width_min, settings.render_height_min],
+            max: [settings.render_width_max, settings.render_height_max],
+        })
+    }
+
+    fn admits(&self, render: [u32; 2], output: [u32; 2]) -> bool {
+        (0..2).all(|i| {
+            self.min[i] > 0
+                && (self.min[i]..=self.max[i]).contains(&self.optimal[i])
+                && (self.min[i]..=self.max[i]).contains(&render[i])
+                && self.max[i] <= output[i]
+        })
+    }
+}
+
+/// Keep the existing optimal-size and sub-rectangle choices. If none fits,
+/// try the requested mode first among the ranges that admit this scene.
+/// Streamline still has to accept the options and evaluate the feature.
+pub(super) fn select_mode(
+    render: [u32; 2],
+    output: [u32; 2],
+    requested: Mode,
+    settings: impl Fn(u32) -> Option<RenderSizes>,
+) -> Option<u32> {
+    pick_mode(render, output, |m| settings(m).map(|s| s.optimal)).or_else(|| {
+        MODES.into_iter()
+            .filter_map(|mode| {
+                let sizes = settings(mode)?;
+                sizes.admits(render, output).then_some((mode, sizes.max))
+            })
+            .min_by_key(|&(mode, [w, h])| (mode != requested.sl_mode(), u64::from(w) * u64::from(h)))
+            .map(|(mode, _)| mode)
+    })
+}
+
 // FidelityFX API upscale flags (`FFX_UPSCALE_ENABLE_*`).
 pub const FFX_HIGH_DYNAMIC_RANGE: u32 = 1 << 0;
 pub const FFX_DISPLAY_RESOLUTION_MOTION_VECTORS: u32 = 1 << 1;
@@ -383,6 +431,88 @@ mod tests {
         assert_eq!(pick_mode([2561, 1440], out, optimal_1440p), None);
         assert_eq!(pick_mode([0, 1440], out, optimal_1440p), None);
         assert_eq!(pick_mode([1280, 720], out, |_| None), None);
+    }
+
+    fn query(code: i32, optimal: [u32; 2], min: [u32; 2], max: [u32; 2]) -> Option<RenderSizes> {
+        RenderSizes::from_query(code, &abi::DlssOptimalSettings {
+            optimal_render_width: optimal[0],
+            optimal_render_height: optimal[1],
+            render_width_min: min[0],
+            render_height_min: min[1],
+            render_width_max: max[0],
+            render_height_max: max[1],
+            ..Default::default()
+        })
+    }
+
+    #[test]
+    fn override_range_admits_the_quality_scene() {
+        let output = [1920, 1080];
+        let mode = Mode::from_name("quality").unwrap();
+        let render = mode.render_size(output);
+        assert_eq!(render, [1280, 720]);
+        let settings = |_| query(0, [960, 540], [960, 540], output);
+        assert_eq!(select_mode(render, output, mode, settings), Some(abi::DLSS_MAX_QUALITY));
+        // With the same settings, moving the scene must check the range again.
+        let bounded = |_| query(0, [960, 540], [960, 540], render);
+        assert_eq!(select_mode(render, output, mode, bounded), Some(abi::DLSS_MAX_QUALITY));
+        for outside in [[1281, 720], [1280, 721], [959, 720], [1280, 539]] {
+            assert_eq!(select_mode(outside, output, mode, bounded), None, "{outside:?}");
+        }
+    }
+
+    #[test]
+    fn exact_and_normal_subrectangles_precede_a_range_match() {
+        let output = [1920, 1080];
+        let scene = [1280, 720];
+        for quality in [scene, [1281, 721]] {
+            let settings = |m| match m {
+                // First in MODES, requested, and its maximum equals the scene.
+                abi::DLSS_DLAA => query(0, [960, 540], [960, 540], scene),
+                abi::DLSS_MAX_QUALITY => query(0, quality, [0, 0], [0, 0]),
+                _ => None,
+            };
+            assert_eq!(select_mode(scene, output, Mode::Dlaa, settings), Some(abi::DLSS_MAX_QUALITY));
+        }
+        let normal = |m| optimal_1440p(m).and_then(|opt| query(0, opt, [0; 2], [0; 2]));
+        let out = [2560, 1440];
+        for m in [Mode::Dlaa, Mode::Quality, Mode::Balanced, Mode::Performance, Mode::UltraPerformance] {
+            assert_eq!(select_mode(m.render_size(out), out, m, normal), Some(m.sl_mode()));
+        }
+    }
+
+    #[test]
+    fn missing_or_inconsistent_settings_cannot_widen_a_mode() {
+        let out = [1920, 1080];
+        let opt = [960, 540];
+        let scene = [1280, 720];
+        for invalid in [
+            None,
+            query(1, opt, opt, out),
+            query(0, [0, 540], opt, out),
+            query(0, [960, 0], opt, out),
+            query(0, opt, [0, 540], out),
+            query(0, opt, opt, [1920, 0]),
+            query(0, opt, [960, 800], [1920, 720]),
+            query(0, opt, [1000, 540], out),
+            query(0, opt, opt, [1921, 1080]),
+        ] {
+            assert_eq!(select_mode(scene, out, Mode::Quality, |_| invalid), None, "{invalid:?}");
+        }
+        let good = |_| query(0, opt, opt, out);
+        for bad_scene in [[0, 720], [1280, 0], [1921, 720], [1280, 1081]] {
+            assert_eq!(select_mode(bad_scene, out, Mode::Quality, good), None, "{bad_scene:?}");
+        }
+    }
+
+    #[test]
+    fn an_unavailable_requested_mode_can_use_another_valid_range() {
+        let settings = |m| match m {
+            abi::DLSS_DLAA => query(0, [960, 540], [960, 540], [1920, 1080]),
+            abi::DLSS_BALANCED => query(0, [960, 540], [960, 540], [1440, 810]),
+            _ => None,
+        };
+        assert_eq!(select_mode([1280, 720], [1920, 1080], Mode::Quality, settings), Some(abi::DLSS_BALANCED));
     }
 
     #[test]

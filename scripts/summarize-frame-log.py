@@ -10,38 +10,49 @@ from statistics import median
 FRAME = re.compile(
     r"\b(\d+(?:\.\d+)?) fps, (\d+(?:\.\d+)?) ms/frame"
     r" \((\d+(?:\.\d+)?) preparing:.*?\),\s*(\d+) draws/frame,"
-    r" dropped \d+ without a host pipeline \((\d+) being made\)"
+    r" dropped (\d+) without a host pipeline \((\d+) being made\)"
 )
 ROOM = re.compile(
     r"the texture queue's room:.*?\+ (\d+) MB kept for render targets"
     r" = \d+ MB against a line of \d+ MB.*?: (.+)"
 )
 UPLOADS = re.compile(r"texture uploads: (\d+) recorded, (\d+) left out")
+RECORDING = re.compile(
+    r"\brecording per frame \(([1-9]\d*) frames\): [^;]*\(all recording threads\); "
+    r"(\d+(?:\.\d+)?) ms waiting for pipelines;"
+)
 TIMESTAMP = re.compile(r"^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d+)?Z")
 MAX_OFFSET_SECONDS = 0.5
 
 
 def read_samples(lines):
-    frames, budgets, uploads = [], [], []
+    frames, budgets, uploads, recording = [], [], [], []
     for line in lines:
         match = FRAME.search(line)
         budget = ROOM.search(line)
         upload = UPLOADS.search(line) if "frame account per frame:" in line else None
-        if not (match or budget or upload):
+        interval = RECORDING.search(line)
+        if not (match or budget or upload or interval):
             continue
         stamp = TIMESTAMP.match(line)
         if not stamp:
             continue
-        time = datetime.fromisoformat(stamp[0]).timestamp()
+        try:
+            parsed = datetime.fromisoformat(stamp[0])
+        except ValueError:
+            continue
+        time = parsed.timestamp()
         if match:
-            fps, milliseconds, preparing, draws, building = match.groups()
+            fps, milliseconds, preparing, draws, dropped, building = match.groups()
             frames.append((time, float(fps), float(milliseconds), float(preparing),
-                           int(draws), int(building)))
+                           int(draws), int(building), int(dropped)))
         if budget:
             budgets.append((time, (int(budget[1]), budget[2].startswith("no room"))))
         if upload:
             uploads.append((time, tuple(map(int, upload.groups()))))
-    return frames, budgets, uploads
+        if interval:
+            recording.append((time, int(interval[1]), float(interval[2])))
+    return frames, budgets, uploads, recording
 
 
 def correlate(frames, records):
@@ -60,25 +71,44 @@ def correlate(frames, records):
 
 
 def summarize(lines, min_draws=1000, slow_ms=200, start=0, end=None):
-    frames, budgets, uploads = read_samples(lines)
+    frames, budgets, uploads, recording = read_samples(lines)
     if not frames:
         return {"samples": 0}
     origin = frames[0][0]
-    world = [frame for frame in frames
-             if frame[4] >= min_draws and frame[0] - origin >= start
-             and (end is None or frame[0] - origin < end)]
+
+    def in_window(time):
+        elapsed = time - origin
+        return elapsed >= start and (end is None or elapsed < end)
+
+    world = [frame for frame in frames if frame[4] >= min_draws and in_window(frame[0])]
+    # Each recording interval has its own frame count and emission time.
+    intervals = [(count, wait) for time, count, wait in recording if in_window(time)]
+    report = {"samples": len(world)}
+    if intervals or world:
+        covered = sum(count for count, _ in intervals)
+        report["recording_intervals"] = {
+            "count": len(intervals),
+            "frames": covered,
+            "mean_pipeline_wait_ms_per_frame": round(
+                sum(count * wait for count, wait in intervals) / covered, 2
+            ) if covered else None,
+        }
     if not world:
-        return {"samples": 0}
+        return report
     slow = [frame for frame in world if frame[2] >= slow_ms]
+    drops_without_builds = [frame[6] for frame in world if frame[5] == 0]
     room = correlate(world, budgets)
     slow_room = correlate(slow, budgets)
     slow_uploads = correlate(slow, uploads)
 
     return {
-        "samples": len(world),
+        **report,
         "median_fps": round(median(frame[1] for frame in world), 2),
         "median_frame_ms": round(median(frame[2] for frame in world), 2),
         "median_prepare_ms": round(median(frame[3] for frame in world), 2),
+        "samples_with_zero_pipelines_building": len(drops_without_builds),
+        "median_dropped_draws_per_frame_with_zero_pipelines_building": median(drops_without_builds)
+        if drops_without_builds else None,
         "slow_threshold_ms": slow_ms,
         "slow_samples": len(slow),
         "slow_samples_with_zero_pipelines_building": sum(frame[5] == 0 for frame in slow),
@@ -93,7 +123,12 @@ def summarize(lines, min_draws=1000, slow_ms=200, start=0, end=None):
 
 
 def main():
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(description=__doc__, epilog=(
+        "Recording intervals use their emission time within [start, end) relative to the "
+        "first FPS sample. Each selected interval contributes all its frames. The draw "
+        "and slow-frame filters apply only to FPS samples. Pipeline wait is summed "
+        "recording-thread wait time per frame."
+    ))
     parser.add_argument("log")
     parser.add_argument("--min-draws", type=int, default=1000)
     parser.add_argument("--slow-ms", type=float, default=200)

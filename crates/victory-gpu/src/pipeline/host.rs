@@ -258,7 +258,10 @@ impl GraphicsState {
                 )
             })
             .collect();
-        let bounds = if self.depth_bounds {
+        // A bounds-only PSO with explicit depth reads needs its own library key.
+        let bounds = if self.needs_bounds_depth_read() {
+            " depth-bounds read-only"
+        } else if self.depth_bounds {
             " depth-bounds"
         } else {
             ""
@@ -277,9 +280,13 @@ impl GraphicsState {
         )
     }
 
+    fn needs_bounds_depth_read(&self) -> bool {
+        self.depth_bounds && !self.depth.DepthEnable.as_bool() && self.depth_format != DXGI_FORMAT_UNKNOWN
+    }
+
     fn depth1(&self) -> D3D12_DEPTH_STENCIL_DESC1 {
         let d = &self.depth;
-        D3D12_DEPTH_STENCIL_DESC1 {
+        let mut depth = D3D12_DEPTH_STENCIL_DESC1 {
             DepthEnable: d.DepthEnable,
             DepthWriteMask: d.DepthWriteMask,
             DepthFunc: d.DepthFunc,
@@ -289,7 +296,15 @@ impl GraphicsState {
             FrontFace: d.FrontFace,
             BackFace: d.BackFace,
             DepthBoundsTestEnable: self.depth_bounds.into(),
+        };
+        if self.needs_bounds_depth_read() {
+            // Some hosts ignore bounds when ordinary depth testing is off. Read the
+            // stored depth while letting every ordinary comparison pass without writing.
+            depth.DepthEnable = true.into();
+            depth.DepthFunc = D3D12_COMPARISON_FUNC_ALWAYS;
+            depth.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
         }
+        depth
     }
 
     /// The vertex buffer slots the input layout reads.
@@ -1209,9 +1224,33 @@ mod tests {
         assert_eq!(host_blend(&blending(false), &t), blending(false));
     }
 
+    #[test]
+    fn bounds_only_pipeline_reads_depth_without_comparing_or_writing() {
+        let mut g = GraphicsState::default();
+        g.depth.DepthEnable = false.into();
+        g.depth_bounds = true;
+        assert!(!g.depth1().DepthEnable.as_bool()); // No depth format.
+
+        g.depth_format = DXGI_FORMAT_D32_FLOAT;
+        let depth = g.depth1();
+        assert!(depth.DepthBoundsTestEnable.as_bool());
+        assert!(depth.DepthEnable.as_bool());
+        assert_eq!(depth.DepthFunc, D3D12_COMPARISON_FUNC_ALWAYS);
+        assert_eq!(depth.DepthWriteMask, D3D12_DEPTH_WRITE_MASK_ZERO);
+
+        g.depth.DepthEnable = true.into();
+        let depth = g.depth1();
+        assert_eq!(depth.DepthFunc, g.depth.DepthFunc);
+        assert_eq!(depth.DepthWriteMask, g.depth.DepthWriteMask);
+
+        g.depth.DepthEnable = false.into();
+        g.depth_bounds = false;
+        assert!(!g.depth1().DepthEnable.as_bool());
+    }
+
     const VS: &str = "float4 main(uint i : SV_VertexID) : SV_Position {
         float2 p = float2((i << 1) & 2, i & 2);
-        return float4(p * 2.0 - 1.0, 0.5, 1.0);
+        return float4(p * 2.0 - 1.0, 0.75, 1.0);
     }";
 
     /// A graphics pipeline with `DepthBoundsTestEnable` loads back from the
@@ -1282,17 +1321,17 @@ mod tests {
             &[&vs, &ps],
             &g.describe(),
         );
-        let pso = graphics_depth_bounds_pipeline(&host.device, &root, &desc, g.depth1(), &name)
+        graphics_depth_bounds_pipeline(&host.device, &root, &desc, g.depth1(), &name)
             .expect("depth-bounds PSO made");
         let loaded = super::super::library::LOADED.load(Ordering::Relaxed);
-        graphics_depth_bounds_pipeline(&host.device, &root, &desc, g.depth1(), &name)
-            .expect("depth-bounds PSO made again");
+        let pso = graphics_depth_bounds_pipeline(&host.device, &root, &desc, g.depth1(), &name)
+            .expect("depth-bounds PSO loaded");
         assert!(
             super::super::library::LOADED.load(Ordering::Relaxed) > loaded,
             "the depth-bounds pipeline was compiled again instead of loaded from the library"
         );
 
-        // Execute two draws against a depth buffer cleared to 0.5:
+        // The incoming depth is 0.75. Bounds must use the stored depth of 0.5:
         // 1) bounds [0.6, 1.0] -> rejected (target stays 0)
         // 2) bounds [0.4, 0.6] replayed onto a fresh HostList -> passes (target becomes 255)
         let make_tex = |format, flags, state, clear: D3D12_CLEAR_VALUE| {

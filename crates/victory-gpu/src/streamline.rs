@@ -2074,16 +2074,7 @@ fn check_run(output: [u32; 2], device: bool, present: bool) -> Vec<String> {
     };
     if dlss {
         // (Known once the first evaluation asked for them.)
-        let sizes = || -> String {
-            let calls = calls();
-            let sizes: Vec<String> = calls
-                .optimal
-                .iter()
-                .filter(|(o, _, _)| *o == output)
-                .map(|&(_, m, s)| format!("{} {:?}", plan::sl_mode_name(m), s.map(|s| s.optimal)))
-                .collect();
-            if sizes.is_empty() { "?".into() } else { sizes.join(", ") }
-        };
+        let sizes = || plan::describe_render_sizes(output, &calls().optimal);
         let mut textures: Textures = Default::default();
         textures[COLOUR] = Some((colour, SHADER_READ));
         textures[DEPTH] = Some((depth.clone(), SHADER_READ));
@@ -2110,23 +2101,26 @@ fn check_run(output: [u32; 2], device: bool, present: bool) -> Vec<String> {
             host.execute_sync_internal(&list);
             // SAFETY: a plain query.
             let removed = unsafe { device.GetDeviceRemovedReason() };
-            match (recorded, removed) {
-                (Ok(r), Ok(())) if round == 0 => lines.push(format!(
-                    "DLSS ran on the GPU: {render:?} -> {output:?} as {} (optimal {:?}); render sizes for {output:?}: {}",
-                    plan::sl_mode_name(r.mode),
-                    r.optimal,
-                    sizes()
-                )),
-                (Ok(_), Ok(())) => {}
-                (Err(why), _) => {
-                    lines.push(format!("DLSS did not run: {why}"));
-                    return lines;
+            let failure = match (recorded, removed) {
+                (Ok(r), Ok(())) => {
+                    if round == 0 {
+                        lines.push(format!(
+                            "DLSS ran on the GPU: {render:?} -> {output:?} as {} (optimal {:?}); render sizes for {output:?}: {}",
+                            plan::sl_mode_name(r.mode),
+                            r.optimal,
+                            sizes().as_deref().unwrap_or("?")
+                        ));
+                    }
+                    continue;
                 }
-                (_, Err(e)) => {
-                    lines.push(format!("the device was removed after DLSS ran: {e}"));
-                    return lines;
-                }
+                (Err(why), _) => format!("DLSS did not run: {why}"),
+                (_, Err(e)) => format!("the device was removed after DLSS ran: {e}"),
+            };
+            lines.push(failure);
+            if round == 0 && let Some(sizes) = sizes() {
+                lines.push(format!("render sizes for {output:?}: {sizes}"));
             }
+            return lines;
         }
         lines.push(if hooked {
             format!(

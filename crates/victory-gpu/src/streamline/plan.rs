@@ -162,6 +162,28 @@ impl RenderSizes {
     }
 }
 
+/// The queried optimal sizes for the check's output, followed by the raw bounds Streamline reported.
+pub(super) fn describe_render_sizes(output: [u32; 2], queries: &[([u32; 2], u32, Option<RenderSizes>)]) -> Option<String> {
+    let mut optimal = Vec::new();
+    let mut bounds = Vec::new();
+    for &(_, mode, sizes) in queries.iter().filter(|(size, _, _)| *size == output) {
+        let name = sl_mode_name(mode);
+        optimal.push(format!("{name} {:?}", sizes.map(|s| s.optimal)));
+        if let Some(s) = sizes {
+            bounds.push(format!("{name} min {:?} max {:?}", s.min, s.max));
+        }
+    }
+    if optimal.is_empty() {
+        return None;
+    }
+    let mut text = optimal.join(", ");
+    if !bounds.is_empty() {
+        text.push_str(" | reported bounds: ");
+        text.push_str(&bounds.join(", "));
+    }
+    Some(text)
+}
+
 /// Keep the existing optimal-size and sub-rectangle choices. If none fits,
 /// try the requested mode first among the ranges that admit this scene.
 /// Streamline still has to accept the options and evaluate the feature.
@@ -443,6 +465,22 @@ mod tests {
             render_height_max: max[1],
             ..Default::default()
         })
+    }
+
+    #[test]
+    fn check_lists_queries_for_this_output_and_preserves_missing_modes() {
+        let output = [1920, 1080];
+        let queries = [
+            ([2560, 1440], abi::DLSS_DLAA, None),
+            (output, abi::DLSS_MAX_QUALITY, query(0, [960, 540], [960, 540], output)),
+            (output, abi::DLSS_BALANCED, None),
+        ];
+        assert_eq!(describe_render_sizes([1280, 720], &queries), None);
+        assert_eq!(describe_render_sizes([2560, 1440], &queries).as_deref(), Some("DLAA None"));
+        assert_eq!(
+            describe_render_sizes(output, &queries).as_deref(),
+            Some("quality Some([960, 540]), balanced None | reported bounds: quality min [960, 540] max [1920, 1080]")
+        );
     }
 
     #[test]

@@ -34,7 +34,9 @@ own upscaling and our plain present run as before.
    - `victory upscaler-check`: Streamline loads, and what this GPU supports.
    - `victory upscaler-check --device`: the host device is made and handed over
      to Streamline, DLSS's render sizes for the output are listed, and DLSS runs
-     three times on stand-in textures.
+     three times on stand-in textures. If the first evaluation fails after querying
+     the modes, the check still lists the optimal size and reported bounds for each
+     available mode. `None` means the query yielded no usable optimal size.
    - `victory upscaler-check --present`: as `--device`, then three seconds of
      presents in a window of ours with frame generation on stand-in depth and
      motion vectors and a stand-in colour without the interface; it reports how

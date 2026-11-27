@@ -44,6 +44,10 @@
 
 1. Download `victory.exe` from the
    [latest release](https://github.com/trustno1-coder/VIctory-NVIDIA/releases/latest).
+   Before opening it, run `Get-FileHash -Algorithm SHA256 -LiteralPath .\victory.exe`
+   in PowerShell and compare the result with the SHA-256 on that release's page.
+   A match identifies the published file. To build a copy from the source tag,
+   follow the build instructions below.
 2. Put it into the folder of **your own dump** of the title's Xbox Series
    build v1.0.2.1, next to `game_scarlett_master.exe`.
 3. Double-click it. Windows may say the publisher is unknown (the file is not
@@ -108,14 +112,23 @@ Install [Rust](https://rustup.rs) and the
 with "Desktop development with C++", then in PowerShell:
 
 ```powershell
-git clone https://github.com/trustno1-coder/VIctory-NVIDIA
+$tag = 'v2026.11.27.8'  # Set this to the release you want to build.
+git clone --branch $tag --depth 1 https://github.com/trustno1-coder/VIctory-NVIDIA
 cd VIctory-NVIDIA
+git rev-parse HEAD
+cargo build --release --locked -p victory
+```
+
+`git rev-parse HEAD` prints the source commit. The launcher is now at
+`target\release\victory.exe`. Building it requires only the source and build
+tools. To run the layer using your own files, continue from the same checkout:
+
+```powershell
 .\Get-NVIDIA-DLSS.cmd
 powershell -ExecutionPolicy Bypass -File scripts\play-nvidia.ps1 -Exe 'D:\Games\MyDump\game_scarlett_master.exe'
 ```
 
-Put the path to **your** `game_scarlett_master.exe` in the last line. The
-first start builds the layer, which takes a few minutes.
+Put the path to **your** `game_scarlett_master.exe` in the last line.
 
 Options, requirements in full and the details are under
 [How to run it](#how-to-run-it).
@@ -279,7 +292,11 @@ What is known to be wrong:
 
 - **No ray tracing.** The title's own is off (`VICTORY_BVH_BUILDER=1`, or the
   menu's RAY TRACING, turns it on: slow and with a broken picture on this
-  base). An estimate stands in for indirect light and reflections.
+  base). An estimate stands in for indirect light and reflections. After a
+  restart, check the log for `the ray-tracing structure builder runs` (all its
+  pipelines are ready), `stays off` (some are missing), or `rests for this
+  frame and the next` (a stage was dropped). A log with none of these messages
+  leaves the builder state unknown.
 - **Frame generation needs room in the card's memory.** The layer fills the
   card with textures up to its budget; with frame generation on from the start
   the launcher holds a fifth of the budget back (a little less while it is only
@@ -290,6 +307,11 @@ What is known to be wrong:
   about a second passes after a change before they come.
 - **The first run of every new build stutters** while the driver compiles
   pipelines (foxhound's README, *Warming up*, says how to make them ahead).
+  To compare a cold and a repeat run, keep the build, driver, route and graphics
+  settings the same and keep the cache between runs. Compare rendered `ms/frame`.
+  The `being made` count is sampled when the line is emitted. A diagnostics
+  build also logs `ms waiting for pipelines` under `recording per frame`,
+  averaged over the frames in that report across recording threads.
 - "SAVE AND RESTART NOW" can leave the old game's process behind without a
   window; it goes when the PC restarts.
 - What foxhound lists as wrong (the heat-haze pass left out, hitches in
@@ -298,9 +320,9 @@ What is known to be wrong:
 ## How to run it
 
 You need Windows 10 or 11 (x64), a CPU with AVX2, 32 GB of RAM or more, an
-SSD, an NVIDIA GeForce RTX card with a recent driver (RTX 40 or later for frame
-generation, with hardware-accelerated GPU scheduling on; more than 2x needs an
-RTX 50), [Rust](https://rustup.rs) (the toolchain is pinned), the Visual Studio
+SSD, an NVIDIA GeForce RTX card with a recent driver (DLSS frame generation needs an RTX 40
+or later and hardware-accelerated GPU scheduling; RTX 20/30 can use FSR 3 at
+2x, as described in the frame generation table above), [Rust](https://rustup.rs) (the toolchain is pinned), the Visual Studio
 Build Tools with "Desktop development with C++", and **your own dump** of the
 title's Xbox Series build v1.0.2.1 (the folder with
 `game_scarlett_master.exe`).

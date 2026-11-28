@@ -1,0 +1,60 @@
+diff --git a/crates/victory-gpu/src/host/upq.rs b/crates/victory-gpu/src/host/upq.rs
+--- a/crates/victory-gpu/src/host/upq.rs
++++ b/crates/victory-gpu/src/host/upq.rs
+@@ -212,26 +212,42 @@
+         assert!(gate(Some(0), 4096));
+         // A size gate sends only the large handoffs, and still refuses absurd ones.
+         assert!(!gate(Some(4 << 20), 4096));
++        assert!(!gate(Some(4 << 20), (4 << 20) - 1));
+         assert!(gate(Some(4 << 20), 4 << 20));
++        assert!(gate(Some(4 << 20), (4 << 20) + 1));
+         assert!(gate(Some(4 << 20), 8 << 20));
++        assert!(gate(Some(4 << 20), 512 << 20));
+         assert!(!gate(Some(4 << 20), (512 << 20) + 1));
+     }
+ 
+     #[test]
+-    fn a_threshold_too_large_to_hold_is_not_a_threshold() {
+-        // What `threshold` does with its MiB count, without reading the environment (which a test
+-        // cannot change once the switch has been read).
+-        let from_mib = |mib: u64| match mib {
+-            0 => None,
+-            1 => Some(0),
+-            mib => mib.checked_mul(1 << 20),
+-        };
+-        assert_eq!(from_mib(0), None);
+-        assert_eq!(from_mib(1), Some(0));
+-        assert_eq!(from_mib(4), Some(4 << 20));
+-        // A count that would wrap must not turn into a small gate.
+-        assert_eq!(from_mib(u64::MAX), None);
+-        assert_eq!(from_mib(u64::MAX / (1 << 20) + 1), None);
++    fn upload_queue_threshold_reads_the_setting() {
++        const EXPECTED: &str = "VICTORY_TEST_UPLOAD_QUEUE_BYTES";
++        if let Ok(expected) = std::env::var(EXPECTED) {
++            let bytes = if expected == "off" { None } else { Some(expected.parse::<u64>().unwrap()) };
++            assert_eq!(threshold(), bytes);
++            return;
++        }
++
++        // Read the actual OnceLock in a fresh process for each setting.
++        for (asked, expected) in [
++            (None, "off"), (Some("0"), "off"), (Some("1"), "0"), (Some("4"), "4194304"),
++            (Some("-1"), "off"), (Some("bad"), "off"),
++            (Some("17592186044415"), "18446744073708503040"), // largest whole MiB in u64
++            (Some("17592186044416"), "off"), (Some("18446744073709551615"), "off"),
++        ] {
++            let mut cmd = std::process::Command::new(std::env::current_exe().unwrap());
++            cmd.env_remove("VICTORY_UPLOAD_QUEUE");
++            if let Some(value) = asked {
++                cmd.env("VICTORY_UPLOAD_QUEUE", value);
++            }
++            let child = cmd.args(["--exact", "host::upq::tests::upload_queue_threshold_reads_the_setting"])
++                .env(EXPECTED, expected)
++                .output().unwrap();
++            let stdout = String::from_utf8_lossy(&child.stdout);
++            let stderr = String::from_utf8_lossy(&child.stderr);
++            assert!(child.status.success() && stdout.contains("1 passed"), "{asked:?}: {stdout}{stderr}");
++        }
+     }
+ 
+     #[test]

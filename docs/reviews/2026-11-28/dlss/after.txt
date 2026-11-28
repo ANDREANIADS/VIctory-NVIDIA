@@ -1,0 +1,15 @@
+source working tree corrected
+record-sha256 183ba178349bf3b21ce850bb9bd683598a2e850e1d0510919d98ca2da2a046d5
+rustc 1.98.1 (48a229cea 2026-09-01)
+override, increasing: 960x540; mode=DLAA; optimal=960x540; offered=960x540; new_queries=6; CLI fields=(optimal Some([960, 540]), offered Some([960, 540]))
+override, increasing: 1280x720; mode=DLAA; optimal=960x540; offered=1920x1080; new_queries=0; CLI fields=(optimal Some([960, 540]), offered Some([1920, 1080]))
+override, decreasing: 1280x720; mode=DLAA; optimal=960x540; offered=1920x1080; new_queries=6; CLI fields=(optimal Some([960, 540]), offered Some([1920, 1080]))
+override, decreasing: 960x540; mode=DLAA; optimal=960x540; offered=960x540; new_queries=0; CLI fields=(optimal Some([960, 540]), offered Some([960, 540]))
+range off, increasing: 960x540; mode=DLAA; optimal=960x540; offered=960x540; new_queries=6; CLI fields=(optimal Some([960, 540]), offered Some([960, 540]))
+range off, increasing: 1280x720; mode=none; optimal=-; offered=-; new_queries=0; rejected before evaluation
+range off, decreasing: 1280x720; mode=none; optimal=-; offered=-; new_queries=6; rejected before evaluation
+range off, decreasing: 960x540; mode=DLAA; optimal=960x540; offered=960x540; new_queries=0; CLI fields=(optimal Some([960, 540]), offered Some([960, 540]))
+standard: 1280x720; mode=quality; optimal=1280x720; offered=1280x720; new_queries=6; CLI fields=(optimal Some([1280, 720]), offered Some([1280, 720]))
+standard: 960x540; mode=performance; optimal=960x540; offered=960x540; new_queries=0; CLI fields=(optimal Some([960, 540]), offered Some([960, 540]))
+standard, range off: 1280x720; mode=quality; optimal=1280x720; offered=1280x720; new_queries=6; CLI fields=(optimal Some([1280, 720]), offered Some([1280, 720]))
+PASS 6 independent sequences, 11 frames, 36 settings queries, 9 simulated evaluations and formatted messages. No D3D12 or SDK execution.

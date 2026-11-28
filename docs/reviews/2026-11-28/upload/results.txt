@@ -1,0 +1,90 @@
+parent ef87380ac02b2ecfce6673782be5a37e3dd7d9f3 e07dbaaa741f1c27937e2db8fd71217a8dfc4843
+head cf9a417b170941a0102b000413c09cce4ea2a969 f91b08217b203c13a5b0dddc686651f52df61abf
+rustc 1.98.1 (48a229cea 2026-09-01)
+mask: one wants(total) bit per byte count 0 1 1048575 1048576 4194303 4194304 4194305 536870911 536870912 536870913 18446744073709551615
+parent_native: 1 passed
+head_native: 2 passed
+head_tests_on_old_parser: 2 passed
+regression_on_head: 2 passed
+regression_on_old_parser: expected failure: ('host::upq::tests::upload_queue_threshold_reads_the_setting', 'Some("17592186044416")', 'left: Some(0)', 'right: None')
+parent_debug None: off false 00000000000
+parent_debug '': off false 00000000000
+parent_debug '  ': off false 00000000000
+parent_debug '0': off false 00000000000
+parent_debug '1': 0 true 01111111100
+parent_debug '+1': 0 true 01111111100
+parent_debug '4': 4194304 true 00000111100
+parent_debug ' +4 ': 4194304 true 00000111100
+parent_debug '512': 536870912 true 00000000100
+parent_debug '513': 537919488 true 00000000000
+parent_debug '-1': off false 00000000000
+parent_debug '-0': off false 00000000000
+parent_debug 'four': off false 00000000000
+parent_debug '4.0': off false 00000000000
+parent_debug '17592186044414': 18446744073707454464 true 00000000000
+parent_debug '17592186044415': 18446744073708503040 true 00000000000
+parent_debug '17592186044416': 0 true 01111111100
+parent_debug '17592186044417': 1048576 true 00011111100
+parent_debug '18446744073709551615': 18446744073708503040 true 00000000000
+parent_debug '18446744073709551616': off false 00000000000
+fixed_debug None: off false 00000000000
+fixed_debug '': off false 00000000000
+fixed_debug '  ': off false 00000000000
+fixed_debug '0': off false 00000000000
+fixed_debug '1': 0 true 01111111100
+fixed_debug '+1': 0 true 01111111100
+fixed_debug '4': 4194304 true 00000111100
+fixed_debug ' +4 ': 4194304 true 00000111100
+fixed_debug '512': 536870912 true 00000000100
+fixed_debug '513': 537919488 true 00000000000
+fixed_debug '-1': off false 00000000000
+fixed_debug '-0': off false 00000000000
+fixed_debug 'four': off false 00000000000
+fixed_debug '4.0': off false 00000000000
+fixed_debug '17592186044414': 18446744073707454464 true 00000000000
+fixed_debug '17592186044415': 18446744073708503040 true 00000000000
+fixed_debug '17592186044416': off false 00000000000
+fixed_debug '17592186044417': off false 00000000000
+fixed_debug '18446744073709551615': off false 00000000000
+fixed_debug '18446744073709551616': off false 00000000000
+parent_optimized None: off false 00000000000
+parent_optimized '': off false 00000000000
+parent_optimized '  ': off false 00000000000
+parent_optimized '0': off false 00000000000
+parent_optimized '1': 0 true 01111111100
+parent_optimized '+1': 0 true 01111111100
+parent_optimized '4': 4194304 true 00000111100
+parent_optimized ' +4 ': 4194304 true 00000111100
+parent_optimized '512': 536870912 true 00000000100
+parent_optimized '513': 537919488 true 00000000000
+parent_optimized '-1': off false 00000000000
+parent_optimized '-0': off false 00000000000
+parent_optimized 'four': off false 00000000000
+parent_optimized '4.0': off false 00000000000
+parent_optimized '17592186044414': 18446744073707454464 true 00000000000
+parent_optimized '17592186044415': 18446744073708503040 true 00000000000
+parent_optimized '17592186044416': 0 true 01111111100
+parent_optimized '17592186044417': 1048576 true 00011111100
+parent_optimized '18446744073709551615': 18446744073708503040 true 00000000000
+parent_optimized '18446744073709551616': off false 00000000000
+fixed_optimized None: off false 00000000000
+fixed_optimized '': off false 00000000000
+fixed_optimized '  ': off false 00000000000
+fixed_optimized '0': off false 00000000000
+fixed_optimized '1': 0 true 01111111100
+fixed_optimized '+1': 0 true 01111111100
+fixed_optimized '4': 4194304 true 00000111100
+fixed_optimized ' +4 ': 4194304 true 00000111100
+fixed_optimized '512': 536870912 true 00000000100
+fixed_optimized '513': 537919488 true 00000000000
+fixed_optimized '-1': off false 00000000000
+fixed_optimized '-0': off false 00000000000
+fixed_optimized 'four': off false 00000000000
+fixed_optimized '4.0': off false 00000000000
+fixed_optimized '17592186044414': 18446744073707454464 true 00000000000
+fixed_optimized '17592186044415': 18446744073708503040 true 00000000000
+fixed_optimized '17592186044416': off false 00000000000
+fixed_optimized '17592186044417': off false 00000000000
+fixed_optimized '18446744073709551615': off false 00000000000
+fixed_optimized '18446744073709551616': off false 00000000000
+PASS 20 settings x 11 upload sizes x 2 revisions x 2 build profiles; both revised native CPU tests pass, and the old parser is detected.

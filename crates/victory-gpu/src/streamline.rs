@@ -1248,6 +1248,7 @@ fn evaluate(host: &crate::host::HostList, up: &Upscale, id: u64) -> bool {
             asked = plan.asked.mode.name(),
             preset = plan.asked.preset,
             optimal = ?recorded.optimal,
+            offered = ?recorded.offered,
             hdr = camera.flags & plan::FFX_HIGH_DYNAMIC_RANGE != 0,
             depth_inverted = camera.depth_inverted(),
             auto_exposure = textures[EXPOSURE].is_none(),
@@ -1285,6 +1286,7 @@ fn formats(textures: &Textures) -> Vec<i32> {
 struct Recorded {
     mode: u32,
     optimal: Option<[u32; 2]>,
+    offered: Option<[u32; 2]>,
     /// Another mode or size than the last time.
     changed: bool,
     jitter: [f32; 2],
@@ -1345,7 +1347,7 @@ fn record(list: *mut c_void, textures: &Textures, camera: &plan::Camera, pre_exp
     // Decided here, not cached: the same output and mode see other render sizes.
     let range = std::env::var_os("VICTORY_DLSS_RANGE").is_none_or(|v| v != "0");
     let render = camera.render;
-    let optimal = |calls: &mut Calls, mode: u32| -> Option<[u32; 2]> {
+    let sizes = |calls: &mut Calls, mode: u32| {
         let [opt, min, max] = answered(calls, mode)?;
         let smaller = opt[0] < render[0] || opt[1] < render[1];
         let held = min[0] <= render[0] && min[1] <= render[1] && max[0] >= render[0] && max[1] >= render[1];
@@ -1357,13 +1359,13 @@ fn record(list: *mut c_void, textures: &Textures, camera: &plan::Camera, pre_exp
                 ?max,
                 "DLSS: the scene is larger than the optimal size (a driver override?); offered at the mode's maximum"
             );
-            return Some(max);
+            return Some((opt, max));
         }
-        Some(opt)
+        Some((opt, opt))
     };
-    let sizes: Vec<(u32, Option<[u32; 2]>)> = plan::MODES.iter().map(|&m| (m, optimal(&mut calls, m))).collect();
-    let optimal_of_mode = |m: u32| sizes.iter().find(|s| s.0 == m).and_then(|s| s.1);
-    let mode = plan::pick_mode(camera.render, output, optimal_of_mode)
+    let modes: Vec<_> = plan::MODES.iter().map(|&m| (m, sizes(&mut calls, m))).collect();
+    let sizes_of_mode = |m: u32| modes.iter().find(|s| s.0 == m).and_then(|s| s.1);
+    let mode = plan::pick_mode(camera.render, output, |m| sizes_of_mode(m).map(|(_, offered)| offered))
         .ok_or_else(|| format!("no DLSS mode takes a {:?} render for a {output:?} output", camera.render))?;
     let mut options = abi::DlssOptions::new(mode, output, plan.asked.preset);
     options.pre_exposure = if pre_exposure > 0.0 { pre_exposure } else { 1.0 };
@@ -1412,7 +1414,8 @@ fn record(list: *mut c_void, textures: &Textures, camera: &plan::Camera, pre_exp
     if let Some(began) = began {
         spent(T_UPSCALE, began);
     }
-    Ok(Recorded { mode, optimal: optimal_of_mode(mode), changed, jitter: constants.jitter_offset, mvec_scale: constants.mvec_scale })
+    let (optimal, offered) = sizes_of_mode(mode).unzip();
+    Ok(Recorded { mode, optimal, offered, changed, jitter: constants.jitter_offset, mvec_scale: constants.mvec_scale })
 }
 
 /// The title's FidelityFX upscaler `context` is destroyed: what DLSS made
@@ -2187,9 +2190,10 @@ fn check_run(output: [u32; 2], device: bool, present: bool) -> Vec<String> {
             let removed = unsafe { device.GetDeviceRemovedReason() };
             match (recorded, removed) {
                 (Ok(r), Ok(())) if round == 0 => lines.push(format!(
-                    "DLSS ran on the GPU: {render:?} -> {output:?} as {} (optimal {:?}); render sizes for {output:?}: {}",
+                    "DLSS ran on the GPU: {render:?} -> {output:?} as {} (optimal {:?}, offered {:?}); render sizes for {output:?}: {}",
                     plan::sl_mode_name(r.mode),
                     r.optimal,
+                    r.offered,
                     sizes()
                 )),
                 (Ok(_), Ok(())) => {}

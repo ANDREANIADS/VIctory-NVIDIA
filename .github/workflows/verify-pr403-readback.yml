@@ -1,0 +1,64 @@
+name: Verify PR 403 D3D12 node readback
+
+on:
+  push:
+    branches: [verification/pr403-node-readback]
+
+permissions:
+  contents: read
+
+jobs:
+  readback:
+    runs-on: windows-2025
+    timeout-minutes: 30
+    steps:
+      - name: Check out the PR base
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          repository: trustno1-coder/VIctory-NVIDIA
+          ref: df2daafeb1b2170931cf7a6eddff6de254841d9c
+          path: base
+          persist-credentials: false
+      - name: Check out the PR head with the readback assertion
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          ref: a86b65eb9c919f9045d19612083edd6083dca38c
+          path: candidate
+          persist-credentials: false
+      - name: Apply the identical test file to the base
+        shell: pwsh
+        run: |
+          $file = 'crates/victory-shader/src/emit/intersect_tests.rs'
+          if ((git -C base rev-parse "HEAD:$file") -ne 'f2eddab68b4280e213517077472aa538261c4754') { throw 'Unexpected base fixture' }
+          $candidate = git -C candidate rev-parse "HEAD:$file"
+          if ($candidate -ne 'f390c98e931ba3cff12186eb1c01accc68b36ace') { throw 'Unexpected candidate fixture' }
+          Copy-Item -LiteralPath "candidate/$file" -Destination "base/$file"
+          if ((git -C base hash-object --path="$file" "$file") -ne $candidate) { throw 'The fixture differs between revisions' }
+          if ($env:VICTORY_WARP) { throw 'Use the default hardware and WARP probes' }
+          Write-Output "Source base df2daafeb1b2170931cf7a6eddff6de254841d9c, PR head a2657986706886c0a27427b5e78d790035201def, test blob $candidate"
+      - name: Confirm the old shader fails the sentinel assertion
+        working-directory: base
+        shell: pwsh
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $false
+          $lines = & cargo test -p victory-shader --locked --lib emit::intersect_tests::the_ -- --nocapture --test-threads=1 2>&1
+          $code = $LASTEXITCODE
+          $lines | ForEach-Object { Write-Output "$_" }
+          $log = $lines -join "`n"
+          $old = [regex]::Matches($log, 'got \[7f800000, 3f800000, 0, 0\]').Count
+          $want = [regex]::Matches($log, 'want \[ffffffff, ffffffff, ffffffff, ffffffff\]').Count
+          if ($code -eq 0 -or $log -notmatch '0 passed; 4 failed' -or $old -ne 4 -or $want -ne 4) {
+            throw "Expected four D3D12 sentinel mismatches on the base; got $old old values and $want expected sentinels"
+          }
+          Write-Output "Verified all four expected failures from the D3D12 readback."
+          exit 0
+      - name: Run the same four readbacks on the repaired shader
+        working-directory: candidate
+        shell: pwsh
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $false
+          $lines = & cargo test -p victory-shader --locked --lib emit::intersect_tests::the_ -- --nocapture --test-threads=1 2>&1
+          $code = $LASTEXITCODE
+          $lines | ForEach-Object { Write-Output "$_" }
+          $log = $lines -join "`n"
+          if ($code -ne 0 -or $log -notmatch '4 passed; 0 failed; 0 ignored') { throw 'Candidate readback checks failed or were skipped' }

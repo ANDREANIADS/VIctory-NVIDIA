@@ -575,6 +575,8 @@ fn run(wide: bool, descriptor: Descriptor, pointers: u64, sort: bool) {
             for t in 0..THREADS as usize {
                 let case = batch.get(t).copied().flatten();
                 let want = match batch.get(t) {
+                    // Instance and procedural nodes return this sentinel even if the CPU reference changes.
+                    Some(Some((_, 6 | 7, _))) => [u32::MAX; 4],
                     Some(c) => expected(&scene, c, sort),
                     // A thread past the batch: its record is zeros, so it
                     // is masked out.

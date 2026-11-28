@@ -1,0 +1,47 @@
+name: Rebuild the v2026.11.27.8 launcher
+
+on:
+  push:
+    branches: [verification/launcher-v2026.11.27.8]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  compare:
+    runs-on: windows-2025
+    timeout-minutes: 45
+    steps:
+      - name: Check out the public release source
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          repository: trustno1-coder/VIctory-NVIDIA
+          ref: 64d4931b3dd90305134512b805fc98f04119fb6e
+          persist-credentials: false
+      - name: Record the source and toolchain
+        shell: pwsh
+        run: |
+          $source = (git rev-parse HEAD).Trim()
+          if ($source -ne '64d4931b3dd90305134512b805fc98f04119fb6e') { throw "Unexpected source $source" }
+          Write-Output "Source $source, runner image $env:ImageOS $env:ImageVersion"
+          rustc --version --verbose
+          cargo --version
+      - name: Compile the Windows launcher
+        run: cargo build --release --locked -p victory
+      - name: Compare the rebuilt file with the published asset digest
+        shell: pwsh
+        run: |
+          $exe = Get-Item -LiteralPath .\target\release\victory.exe -ErrorAction Stop
+          $actual = (Get-FileHash -LiteralPath $exe.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+          $published = '30cce7b52c903ce8f6e1fd7518076b41c8f058a5cf12e70b7468317edcf83702'
+          $result = if ($actual -eq $published) { 'MATCH' } else { 'DIFFERENT' }
+          $report = @(
+            "Source commit: 64d4931b3dd90305134512b805fc98f04119fb6e"
+            "Rebuilt bytes: $($exe.Length)"
+            "Rebuilt SHA-256: $actual"
+            "Published SHA-256: $published"
+            "Digest comparison: $result"
+          )
+          $report | Write-Output
+          $report -join "`n`n" | Out-File -Append $env:GITHUB_STEP_SUMMARY
